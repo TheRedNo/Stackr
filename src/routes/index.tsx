@@ -265,7 +265,7 @@ function Index() {
                                     }}
                                     className="w-full px-4 py-3 text-left text-sm text-primary hover:bg-accent"
                                 >
-                                    + Profil hinzufügen
+                                    + Add profile
                                 </button>
                             </div>
                         )}
@@ -319,7 +319,7 @@ function Index() {
                             value={query}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="App suchen…"
+                            placeholder="Search for an app…"
                             className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                         />
                     </div>
@@ -375,7 +375,7 @@ function Index() {
 
                     {apps.length > 0 && filtered.length === 0 && (
                         <div className="col-span-full rounded-2xl border border-dashed py-16 text-center text-sm text-muted-foreground pr-4 pl-4">
-                            Keine App gefunden für „{query}"
+                            No app found for „{query}"
                         </div>
                     )}
                 </section>
@@ -399,7 +399,7 @@ function Index() {
                                 value={newProfileName}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => setNewProfileName(e.target.value)}
-                                placeholder="Profilname, z. B. Kunde A"
+                                placeholder="Profile name, e.g., Customer A"
                                 className="w-full rounded-xl border bg-background px-4 py-3 text-sm outline-none"
                                 autoFocus
                             />
@@ -413,14 +413,14 @@ function Index() {
                                 }}
                                 className="rounded-xl border px-4 py-2 text-sm hover:bg-accent"
                             >
-                                Abbrechen
+                                Cancel
                             </button>
 
                             <button
                                 onClick={addProfile}
                                 className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                             >
-                                Erstellen
+                                Create
                             </button>
                         </div>
                     </div>
@@ -440,14 +440,14 @@ function Index() {
                         onClick={() => openProfileEdit(profileContextMenu.profile)}
                         className="w-full px-4 py-3 text-left text-sm hover:bg-accent"
                     >
-                        Umbenennen
+                        Rename
                     </button>
 
                     <button
                         onClick={() => deleteProfile(profileContextMenu.profile)}
                         className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-accent"
                     >
-                        Löschen
+                        Delete
                     </button>
                 </div>
             )}
@@ -458,14 +458,14 @@ function Index() {
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="w-full max-w-md rounded-2xl border bg-card p-6 shadow-glow">
-                        <h2 className="text-xl font-semibold">Profil umbenennen</h2>
+                        <h2 className="text-xl font-semibold">Rename profile</h2>
 
                         <div className="mt-5">
                             <input
                                 value={editProfileName}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => setEditProfileName(e.target.value)}
-                                placeholder="Profilname"
+                                placeholder="Profile name"
                                 className="w-full rounded-xl border bg-background px-4 py-3 text-sm outline-none"
                                 autoFocus
                             />
@@ -479,14 +479,14 @@ function Index() {
                                 }}
                                 className="rounded-xl border px-4 py-2 text-sm hover:bg-accent"
                             >
-                                Abbrechen
+                                Cancel
                             </button>
 
                             <button
                                 onClick={saveProfileEdit}
                                 className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                             >
-                                Speichern
+                                Save
                             </button>
                         </div>
                     </div>
@@ -516,7 +516,7 @@ function Index() {
                             <input
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Beschreibung optional"
+                                placeholder="Description optional"
                                 className="w-full rounded-xl border bg-background px-4 py-3 text-sm outline-none"
                             />
                         </div>
@@ -526,14 +526,14 @@ function Index() {
                                 onClick={() => setShowAdd(false)}
                                 className="rounded-xl border px-4 py-2 text-sm hover:bg-accent"
                             >
-                                Abbrechen
+                                Cancel
                             </button>
 
                             <button
                                 onClick={addApp}
                                 className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                             >
-                                Speichern
+                                Save
                             </button>
                         </div>
                     </div>
@@ -553,6 +553,16 @@ function Index() {
                         className="w-full px-4 py-3 text-left text-sm hover:bg-accent"
                     >
                         Edit
+                    </button>
+
+                    <button
+                        onClick={async () => {
+                            await window.stackr.createDesktopShortcut(contextMenu.app.id);
+                            setContextMenu(null);
+                        }}
+                        className="w-full px-4 py-3 text-left text-sm hover:bg-accent"
+                    >
+                        Create Desktop Shortcut
                     </button>
 
                     <button
@@ -587,7 +597,7 @@ function Index() {
                             <input
                                 value={editDescription}
                                 onChange={(e) => setEditDescription(e.target.value)}
-                                placeholder="Beschreibung optional"
+                                placeholder="Description optional"
                                 className="w-full rounded-xl border bg-background px-4 py-3 text-sm outline-none"
                             />
                         </div>
@@ -597,14 +607,14 @@ function Index() {
                                 onClick={() => setEditingApp(null)}
                                 className="rounded-xl border px-4 py-2 text-sm hover:bg-accent"
                             >
-                                Abbrechen
+                                Cancel
                             </button>
 
                             <button
                                 onClick={saveEdit}
                                 className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                             >
-                                Speichern
+                                Save
                             </button>
                         </div>
                     </div>

@@ -82,3 +82,11 @@
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+*:focus-visible {
+  outline: none;
+  box-shadow:
+          0 0 0 1px rgba(99, 102, 241, 0.8),
+          0 0 20px rgba(99, 102, 241, 0.35);
+  border-radius: 12px;
+}

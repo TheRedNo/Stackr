@@ -1,0 +1,11 @@
+# Abhängigkeiten ausschließen
+node_modules/
+
+# Build-Ordner von Vite und Electron-Builder ausschließen
+dist/
+release/
+
+# Temporäre Log-Dateien ausschließen
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

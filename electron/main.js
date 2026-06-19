@@ -1,8 +1,13 @@
-const { app, BrowserWindow, BrowserView, ipcMain, session } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, session, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { pathToFileURL } = require("url");
+const { autoUpdater } = require('electron-updater');
+
+
+const pngToIcoModule = require("png-to-ico");
+const pngToIco = pngToIcoModule.default || pngToIcoModule;
 
 let mainWindow;
 let webView;
@@ -201,11 +206,82 @@ function createWindow() {
         // Im Build laden wir die lokale index.html aus dem dist-Ordner
         // Da main.js in /electron liegt, springen wir mit '..' hoch und dann in 'dist'
         mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+
+        app.whenReady().then(() => {
+            autoUpdater.checkForUpdatesAndNotify();
+        });
     }
+
+    mainWindow.webContents.once("did-finish-load", () => {
+        const startupAppId = getStartupAppId();
+
+        if (startupAppId) {
+            const appItem = findAppById(startupAppId);
+
+            if (appItem) {
+                openWebApp(appItem.url);
+            }
+        }
+    });
 
 
     mainWindow.on("resize", resizeWebView);
 }
+
+function findAppById(id) {
+    const appsData = readApps();
+    return appsData.apps.find((a) => a.id === id);
+}
+
+function sanitizeShortcutName(name) {
+    return name.replace(/[<>:"/\\|?*]/g, "").trim();
+}
+
+async function createDesktopShortcut(appItem) {
+    const desktopPath = app.getPath("desktop");
+    const shortcutName = sanitizeShortcutName(appItem.name) || "Stackr App";
+    const shortcutPath = path.join(desktopPath, `${shortcutName}.lnk`);
+
+    const exePath = process.execPath;
+    const iconPath = await ensureIcoForApp(appItem);
+
+    const success = shell.writeShortcutLink(shortcutPath, {
+        target: exePath,
+        args: `--open-app=${appItem.id}`,
+        description: `Open ${appItem.name} in Stackr`,
+        icon: iconPath,
+        iconIndex: 0,
+    });
+
+    return success;
+}
+
+function getStartupAppId() {
+    const arg = process.argv.find((a) => a.startsWith("--open-app="));
+    if (!arg) return null;
+
+    return arg.replace("--open-app=", "");
+}
+
+async function ensureIcoForApp(appItem) {
+    if (!appItem.icon || !fs.existsSync(appItem.icon)) {
+        return process.execPath;
+    }
+
+    const icoPath = appItem.icon.replace(/\.png$/i, ".ico");
+
+    if (!fs.existsSync(icoPath)) {
+        const icoBuffer = await pngToIco(appItem.icon);
+        fs.writeFileSync(icoPath, icoBuffer);
+    }
+
+    return icoPath;
+}
+
+autoUpdater.on('update-downloaded', () => {
+    // Startet die App neu und installiert das Update im Hintergrund
+    autoUpdater.quitAndInstall();
+});
 
 app.whenReady().then(() => {
     ensureDataFiles();
@@ -424,6 +500,16 @@ app.whenReady().then(() => {
         }
 
         return true;
+    });
+
+    ipcMain.handle("shortcut:create", async (_event, id) => {
+        const appItem = findAppById(id);
+
+        if (!appItem) {
+            throw new Error("App nicht gefunden");
+        }
+
+        return await createDesktopShortcut(appItem);
     });
 
     createWindow();

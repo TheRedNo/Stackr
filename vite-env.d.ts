@@ -54,5 +54,7 @@ interface Window {
         minimize: () => Promise<void>;
         maximize: () => Promise<void>;
         close: () => Promise<void>;
+
+        createDesktopShortcut: (id: string) => Promise<boolean>;
     };
 }
