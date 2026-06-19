@@ -490,8 +490,6 @@ function getCustomLogo(url) {
 
     return path.join(
         __dirname,
-        "..",
-        "src",
         "assets",
         "logos",
         match.icon
@@ -615,7 +613,7 @@ function createWindow() {
         height: 900,
         frame: false,
         titleBarStyle: "hidden",
-        icon: path.join(__dirname, '../src/assets/logo.ico'),
+        icon: path.join(__dirname, "assets", "logo.ico"),
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             contextIsolation: true,
@@ -727,7 +725,8 @@ function showMainWindow() {
 function createTray() {
     const iconPath = path.join(
         __dirname,
-        "../public/logo.ico"
+        "assets",
+        "logo.ico"
     );
 
     const trayIcon = nativeImage.createFromPath(iconPath);
