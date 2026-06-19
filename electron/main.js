@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, ipcMain, session, shell } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, session, shell, globalShortcut, nativeImage, Tray, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
@@ -9,12 +9,22 @@ const { autoUpdater } = require("electron-updater");
 const pngToIcoModule = require("png-to-ico");
 const pngToIco = pngToIcoModule.default || pngToIcoModule;
 
+const CUSTOM_LOGOS = {
+    "notebooklm.google.com": path.join(__dirname, "assets", "logos", "notebooklm.png"),
+};
+
+let tray = null;
+
+if (process.platform === "win32") {
+    app.setAppUserModelId("de.theredno.stackr");
+}
 
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
     app.quit();
 } else {
+
     app.on("second-instance", (_event, commandLine) => {
         if (mainWindow) {
             if (mainWindow.isMinimized()) {
@@ -22,6 +32,7 @@ if (!gotTheLock) {
             }
 
             mainWindow.focus();
+
             mainWindow.show();
 
             const openAppArg = commandLine.find((arg) =>
@@ -209,7 +220,7 @@ if (!gotTheLock) {
         });
 
         ipcMain.handle("window:close", () => {
-            mainWindow?.close();
+            mainWindow?.hide();
         });
 
         ipcMain.handle("profiles:update", (_event, id, name) => {
@@ -294,6 +305,22 @@ if (!gotTheLock) {
         createWindow();
 
         setupAutoUpdater();
+
+        const success = globalShortcut.register("CommandOrControl+Alt+.", () => {
+            showMainWindow();
+        });
+
+        console.log(
+            success
+                ? "Global Shortcut registriert"
+                : "Global Shortcut konnte nicht registriert werden"
+        );
+
+        createTray();
+    });
+
+    app.on("before-quit", () => {
+        app.isQuitting = true;
     });
 }
 
@@ -383,32 +410,92 @@ function saveApps(data) {
 }
 
 async function downloadIcon(appId, appUrl) {
-    const iconApiUrl =
-        `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(appUrl)}`;
+    try {
+        const iconPath = path.join(
+            getDataDir(),
+            "icons",
+            `${appId}.png`
+        );
 
-    const response = await fetch(iconApiUrl, {
-        redirect: "follow",
-    });
+        // Custom Logo prüfen
+        const customLogo = getCustomLogo(appUrl);
 
-    if (!response.ok) {
-        throw new Error(`Icon download failed: ${response.status}`);
+        if (customLogo && fs.existsSync(customLogo)) {
+            fs.copyFileSync(customLogo, iconPath);
+
+            return {
+                iconPath,
+                iconDataUrl: pathToFileURL(iconPath).href,
+            };
+        }
+
+        // Hostname ermitteln
+        const hostname = new URL(appUrl).hostname;
+
+        const faviconUrl =
+            `https://www.google.com/s2/favicons?sz=256&domain=${hostname}`;
+
+        const response = await fetch(faviconUrl);
+
+        if (!response.ok) {
+            throw new Error(
+                `Icon Download Fehler: ${response.status}`
+            );
+        }
+
+        const buffer = Buffer.from(
+            await response.arrayBuffer()
+        );
+
+        fs.writeFileSync(iconPath, buffer);
+
+        return {
+            iconPath,
+            iconDataUrl: pathToFileURL(iconPath).href,
+        };
+    } catch (error) {
+        console.error(
+            "Icon konnte nicht geladen werden:",
+            error
+        );
+
+        return {
+            iconPath: null,
+            iconDataUrl: null,
+        };
+    }
+}
+
+function getCustomLogo(url) {
+    const normalized = url
+        .toLowerCase()
+        .trim()
+        .replace(/^https?:\/\//, "")
+        .replace(/^www\./, "");
+
+    const customLogos = [
+        {
+            match: "notebooklm.google.com",
+            icon: "notebooklm.png",
+        }
+    ];
+
+    const match = customLogos.find((x) =>
+        normalized.startsWith(x.match)
+    );
+
+    if (!match) {
+        return null;
     }
 
-    const contentType = response.headers.get("content-type") || "";
-
-    if (!contentType.includes("image")) {
-        throw new Error(`Invalid icon content-type: ${contentType}`);
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    const iconPath = path.join(getDataDir(), "icons", `${appId}.png`);
-
-    fs.writeFileSync(iconPath, buffer);
-
-    return {
-        iconPath,
-        iconUrl: pathToFileURL(iconPath).href,
-    };
+    return path.join(
+        __dirname,
+        "..",
+        "src",
+        "assets",
+        "logos",
+        match.icon
+    );
 }
 
 function getCurrentProfileId() {
@@ -447,6 +534,8 @@ function openWebApp(url) {
 
     const profileId = getCurrentProfileId();
     const profileSession = session.fromPartition(`persist:${profileId}`);
+
+    setupNotificationPermissions(profileSession);
 
     webView = new BrowserView({
         webPreferences: {
@@ -558,6 +647,14 @@ function createWindow() {
     });
 
 
+    mainWindow.on("close", (event) => {
+        if (!app.isQuitting) {
+            event.preventDefault();
+            mainWindow.hide();
+        }
+    });
+
+
     mainWindow.on("resize", resizeWebView);
 }
 
@@ -609,4 +706,80 @@ async function ensureIcoForApp(appItem) {
     }
 
     return icoPath;
+}
+
+function showMainWindow() {
+    if (!mainWindow) return;
+
+    if (mainWindow.isFocused()) {
+        mainWindow.minimize();
+        return;
+    }
+
+    if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+    }
+
+    mainWindow.show();
+    mainWindow.focus();
+}
+
+function createTray() {
+    const iconPath = path.join(
+        __dirname,
+        "../public/logo.ico"
+    );
+
+    const trayIcon = nativeImage.createFromPath(iconPath);
+
+    tray = new Tray(trayIcon.resize({
+        width: 16,
+        height: 16
+    }));
+
+    tray.setToolTip("Stackr");
+
+    const contextMenu = Menu.buildFromTemplate([
+        {
+            label: "Open",
+            click() {
+                showMainWindow();
+            }
+        },
+        {
+            type: "separator"
+        },
+        {
+            label: "Quit",
+            click() {
+                app.isQuitting = true;
+                app.quit();
+            }
+        }
+    ]);
+
+    tray.setContextMenu(contextMenu);
+
+    tray.on("double-click", () => {
+        showMainWindow();
+    });
+}
+
+function setupNotificationPermissions(profileSession) {
+    profileSession.setPermissionRequestHandler((webContents, permission, callback) => {
+        if (permission === "notifications") {
+            callback(true);
+            return;
+        }
+
+        callback(false);
+    });
+
+    profileSession.setPermissionCheckHandler((_webContents, permission) => {
+        if (permission === "notifications") {
+            return true;
+        }
+
+        return false;
+    });
 }

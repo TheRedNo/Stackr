@@ -3,9 +3,11 @@ import {
     ChevronDown,
     Home,
     Minus,
+    Moon,
     Plus,
     Search,
     Square,
+    Sun,
     X,
     Download,
 } from "lucide-react";
@@ -52,6 +54,20 @@ function Index() {
 
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
 
+    const [darkMode, setDarkMode] = useState(true);
+
+    useEffect(() => {
+        const savedTheme = localStorage.getItem("stackr-theme");
+
+        if (savedTheme === "light") {
+            document.documentElement.classList.remove("dark");
+            setDarkMode(false);
+        } else {
+            document.documentElement.classList.add("dark");
+            setDarkMode(true);
+        }
+    }, []);
+
     useEffect(() => {
         window.stackr.onUpdateStatus((data) => {
             setUpdateStatus(data);
@@ -76,6 +92,20 @@ function Index() {
                 a.description.toLowerCase().includes(q)
         );
     }, [apps, query]);
+
+    function toggleTheme() {
+        const nextDarkMode = !darkMode;
+
+        setDarkMode(nextDarkMode);
+
+        if (nextDarkMode) {
+            document.documentElement.classList.add("dark");
+            localStorage.setItem("stackr-theme", "dark");
+        } else {
+            document.documentElement.classList.remove("dark");
+            localStorage.setItem("stackr-theme", "light");
+        }
+    }
 
     async function selectProfile(id: string) {
         await window.stackr.setCurrentProfile(id);
@@ -330,15 +360,32 @@ function Index() {
 
             <div className="mx-auto max-w-6xl px-6 pb-12 pt-28 sm:pb-16">
                 <section>
-                    <div className="flex items-center gap-3 rounded-2xl border bg-card/60 px-4 py-3 shadow-tile backdrop-blur">
-                        <Search className="h-4 w-4 text-muted-foreground" size={16} />
-                        <input
-                            value={query}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search for an app…"
-                            className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                        />
+                    <div className="flex items-center gap-3">
+                        <div className="flex flex-1 items-center gap-3 rounded-2xl border bg-card/60 px-4 py-3 shadow-tile backdrop-blur">
+                            <Search className="h-4 w-4 text-muted-foreground" size={16} />
+                            <input
+                                value={query}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="App suchen…"
+                                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                            />
+                        </div>
+
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTheme();
+                            }}
+                            className="grid h-12 w-12 place-items-center rounded-full border bg-card/60 shadow-tile backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-accent hover:shadow-glow"
+                            title={darkMode ? "Light Mode" : "Dark Mode"}
+                        >
+                            {darkMode ? (
+                                <Sun size={20} />
+                            ) : (
+                                <Moon size={20} />
+                            )}
+                        </button>
                     </div>
                 </section>
 
@@ -526,7 +573,7 @@ function Index() {
                             <input
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
-                                placeholder="URL"
+                                placeholder="URL e.g. https://chatgpt.com"
                                 className="w-full rounded-xl border bg-background px-4 py-3 text-sm outline-none"
                             />
 

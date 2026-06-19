@@ -38,6 +38,29 @@
 
 :root {
   --radius: 0.875rem;
+  --background: oklch(0.985 0.003 270);
+  --foreground: oklch(0.18 0.012 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.012 270);
+  --card-hover: oklch(0.97 0.005 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.012 270);
+  --primary: oklch(0.55 0.2 260);
+  --primary-foreground: oklch(0.99 0.003 270);
+  --secondary: oklch(0.95 0.008 270);
+  --secondary-foreground: oklch(0.2 0.012 270);
+  --muted: oklch(0.95 0.008 270);
+  --muted-foreground: oklch(0.5 0.018 270);
+  --accent: oklch(0.92 0.02 270);
+  --accent-foreground: oklch(0.2 0.012 270);
+  --destructive: oklch(0.6 0.22 25);
+  --destructive-foreground: oklch(0.99 0.003 270);
+  --border: oklch(0 0 0 / 0.1);
+  --input: oklch(0 0 0 / 0.08);
+  --ring: oklch(0.55 0.2 260);
+}
+
+.dark {
   --background: oklch(0.16 0.012 270);
   --foreground: oklch(0.98 0.003 270);
   --card: oklch(0.21 0.014 270);
@@ -67,9 +90,13 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     background-image:
-      radial-gradient(60% 50% at 15% 0%, oklch(0.72 0.18 255 / 0.18), transparent 70%),
-      radial-gradient(50% 40% at 95% 10%, oklch(0.7 0.2 320 / 0.14), transparent 70%);
+            radial-gradient(60% 50% at 15% 0%, var(--bg-glow-1, oklch(0.55 0.2 260 / 0.12)), transparent 70%),
+            radial-gradient(50% 40% at 95% 10%, var(--bg-glow-2, oklch(0.7 0.2 320 / 0.08)), transparent 70%);
     background-attachment: fixed;
+  }
+  .dark body {
+    --bg-glow-1: oklch(0.72 0.18 255 / 0.18);
+    --bg-glow-2: oklch(0.7 0.2 320 / 0.14);
   }
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
 }
