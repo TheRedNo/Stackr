@@ -9,7 +9,7 @@
     "electron": "electron .",
     "build": "vite build",
     "dist": "npm run build && electron-builder",
-    "publish": "npm run build && electron-builder --publish always"
+    "publish": "npm run build && electron-builder --publish onTagOrDraft"
   },
   "keywords": [],
   "author": "TheRedNo",
