@@ -9,6 +9,295 @@ const { autoUpdater } = require("electron-updater");
 const pngToIcoModule = require("png-to-ico");
 const pngToIco = pngToIcoModule.default || pngToIcoModule;
 
+
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+    app.quit();
+} else {
+    app.on("second-instance", (_event, commandLine) => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) {
+                mainWindow.restore();
+            }
+
+            mainWindow.focus();
+            mainWindow.show();
+
+            const openAppArg = commandLine.find((arg) =>
+                arg.startsWith("--open-app=")
+            );
+
+            if (openAppArg) {
+                const appId = openAppArg.replace("--open-app=", "");
+                const appItem = findAppById(appId);
+
+                if (appItem) {
+                    openWebApp(appItem.url);
+                }
+            }
+        }
+    });
+
+    app.whenReady().then(() => {
+        ensureDataFiles();
+
+        ipcMain.handle("apps:get", () => {
+            return readApps().apps;
+        });
+
+        ipcMain.handle("apps:add", async (_event, payload) => {
+            const appsData = readApps();
+            const id = crypto.randomUUID();
+
+            const newApp = {
+                id,
+                name: payload.name,
+                url: payload.url,
+                description: payload.description || "",
+                category: payload.category || "Produktivität",
+                icon: null,
+                iconUrl: null,
+                iconDataUrl: null,
+            };
+
+            try {
+                const icon = await downloadIcon(id, payload.url);
+                newApp.icon = icon.iconPath;
+                newApp.iconUrl = icon.iconUrl;
+                newApp.iconDataUrl = imageToDataUrl(icon.iconPath);
+            } catch (err) {
+                console.error("Icon konnte nicht geladen werden:", err);
+            }
+
+            appsData.apps.push(newApp);
+            saveApps(appsData);
+
+            return newApp;
+        });
+
+        ipcMain.handle("apps:update", async (_event, id, payload) => {
+            const appsData = readApps();
+            const index = appsData.apps.findIndex((a) => a.id === id);
+
+            if (index === -1) throw new Error("App nicht gefunden");
+
+            const oldApp = appsData.apps[index];
+
+            let finalUrl = payload.url;
+            if (!finalUrl.startsWith("http")) {
+                finalUrl = `https://${finalUrl}`;
+            }
+
+            const updatedApp = {
+                ...oldApp,
+                name: payload.name,
+                url: finalUrl,
+                description: payload.description || oldApp.description || "",
+            };
+
+            if (oldApp.url !== finalUrl) {
+                try {
+                    const icon = await downloadIcon(id, finalUrl);
+                    updatedApp.icon = icon.iconPath;
+                    updatedApp.iconUrl = icon.iconUrl;
+                    updatedApp.iconDataUrl = imageToDataUrl(icon.iconPath);
+                } catch (err) {
+                    console.error("Icon konnte beim Update nicht geladen werden:", err);
+                }
+            }
+
+            appsData.apps[index] = updatedApp;
+            saveApps(appsData);
+
+            return updatedApp;
+        });
+
+        ipcMain.handle("apps:delete", async (_event, id) => {
+            const appsData = readApps();
+            const appToDelete = appsData.apps.find((a) => a.id === id);
+
+            appsData.apps = appsData.apps.filter((a) => a.id !== id);
+            saveApps(appsData);
+
+            if (appToDelete?.icon && fs.existsSync(appToDelete.icon)) {
+                try {
+                    fs.unlinkSync(appToDelete.icon);
+                } catch (err) {
+                    console.error("Icon konnte nicht gelöscht werden:", err);
+                }
+            }
+
+            return true;
+        });
+
+        ipcMain.handle("profiles:get", () => {
+            return readJson("profiles.json").profiles;
+        });
+
+        ipcMain.handle("profiles:add", (_event, name) => {
+            const profilesData = readJson("profiles.json");
+
+            const id = name
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "") || crypto.randomUUID();
+
+            if (profilesData.profiles.some((p) => p.id === id)) {
+                throw new Error("Profil existiert bereits");
+            }
+
+            const profile = {
+                id,
+                name,
+            };
+
+            profilesData.profiles.push(profile);
+            saveJson("profiles.json", profilesData);
+
+            return profile;
+        });
+
+        ipcMain.handle("profiles:get-current", () => {
+            return getCurrentProfileId();
+        });
+
+        ipcMain.handle("profiles:set-current", (_event, id) => {
+            const profiles = readJson("profiles.json").profiles;
+
+            if (!profiles.some((p) => p.id === id)) {
+                throw new Error("Profil nicht gefunden");
+            }
+
+            closeWebApp();
+            return setCurrentProfileId(id);
+        });
+
+        ipcMain.handle("nav:open", (_event, url) => {
+            openWebApp(url);
+        });
+
+        ipcMain.handle("nav:home", () => {
+            closeWebApp();
+        });
+
+        ipcMain.handle("nav:back", () => {
+            if (webView && webView.webContents.canGoBack()) {
+                webView.webContents.goBack();
+            }
+        });
+
+        ipcMain.handle("nav:forward", () => {
+            if (webView && webView.webContents.canGoForward()) {
+                webView.webContents.goForward();
+            }
+        });
+
+        ipcMain.handle("window:minimize", () => {
+            mainWindow?.minimize();
+        });
+
+        ipcMain.handle("window:maximize", () => {
+            if (!mainWindow) return;
+
+            if (mainWindow.isMaximized()) {
+                mainWindow.unmaximize();
+            } else {
+                mainWindow.maximize();
+            }
+        });
+
+        ipcMain.handle("window:close", () => {
+            mainWindow?.close();
+        });
+
+        ipcMain.handle("profiles:update", (_event, id, name) => {
+            const profilesData = readJson("profiles.json");
+            const index = profilesData.profiles.findIndex((p) => p.id === id);
+
+            if (index === -1) {
+                throw new Error("Profil nicht gefunden");
+            }
+
+            profilesData.profiles[index] = {
+                ...profilesData.profiles[index],
+                name,
+            };
+
+            saveJson("profiles.json", profilesData);
+
+            return profilesData.profiles[index];
+        });
+
+        ipcMain.handle("profiles:delete", (_event, id) => {
+            const profilesData = readJson("profiles.json");
+
+            if (profilesData.profiles.length <= 1) {
+                throw new Error("Das letzte Profil kann nicht gelöscht werden");
+            }
+
+            const profileToDelete = profilesData.profiles.find((p) => p.id === id);
+
+            if (!profileToDelete) {
+                throw new Error("Profil nicht gefunden");
+            }
+
+            profilesData.profiles = profilesData.profiles.filter((p) => p.id !== id);
+            saveJson("profiles.json", profilesData);
+
+            const settings = readJson("settings.json");
+
+            if (settings.currentProfile === id) {
+                const fallbackProfile = profilesData.profiles[0];
+                settings.currentProfile = fallbackProfile.id;
+                saveJson("settings.json", settings);
+                closeWebApp();
+            }
+
+            return true;
+        });
+
+        ipcMain.handle("shortcut:create", async (_event, id) => {
+            const appItem = findAppById(id);
+
+            if (!appItem) {
+                throw new Error("App nicht gefunden");
+            }
+
+            return await createDesktopShortcut(appItem);
+        });
+
+        ipcMain.handle("update:check", async () => {
+            if (!app.isPackaged) {
+                return {
+                    status: "dev",
+                    message: "Auto-Updater funktioniert nur in der gebauten App."
+                };
+            }
+
+            autoUpdater.checkForUpdates();
+            return {
+                status: "checking",
+                message: "Suche nach Updates..."
+            };
+        });
+
+        ipcMain.handle("update:download", async () => {
+            autoUpdater.downloadUpdate();
+        });
+
+        ipcMain.handle("update:install", async () => {
+            autoUpdater.quitAndInstall();
+        });
+
+        createWindow();
+
+        setupAutoUpdater();
+    });
+}
+
+
 let mainWindow;
 let webView;
 
@@ -321,261 +610,3 @@ async function ensureIcoForApp(appItem) {
 
     return icoPath;
 }
-;
-
-app.whenReady().then(() => {
-    ensureDataFiles();
-
-    ipcMain.handle("apps:get", () => {
-        return readApps().apps;
-    });
-
-    ipcMain.handle("apps:add", async (_event, payload) => {
-        const appsData = readApps();
-        const id = crypto.randomUUID();
-
-        const newApp = {
-            id,
-            name: payload.name,
-            url: payload.url,
-            description: payload.description || "",
-            category: payload.category || "Produktivität",
-            icon: null,
-            iconUrl: null,
-            iconDataUrl: null,
-        };
-
-        try {
-            const icon = await downloadIcon(id, payload.url);
-            newApp.icon = icon.iconPath;
-            newApp.iconUrl = icon.iconUrl;
-            newApp.iconDataUrl = imageToDataUrl(icon.iconPath);
-        } catch (err) {
-            console.error("Icon konnte nicht geladen werden:", err);
-        }
-
-        appsData.apps.push(newApp);
-        saveApps(appsData);
-
-        return newApp;
-    });
-
-    ipcMain.handle("apps:update", async (_event, id, payload) => {
-        const appsData = readApps();
-        const index = appsData.apps.findIndex((a) => a.id === id);
-
-        if (index === -1) throw new Error("App nicht gefunden");
-
-        const oldApp = appsData.apps[index];
-
-        let finalUrl = payload.url;
-        if (!finalUrl.startsWith("http")) {
-            finalUrl = `https://${finalUrl}`;
-        }
-
-        const updatedApp = {
-            ...oldApp,
-            name: payload.name,
-            url: finalUrl,
-            description: payload.description || oldApp.description || "",
-        };
-
-        if (oldApp.url !== finalUrl) {
-            try {
-                const icon = await downloadIcon(id, finalUrl);
-                updatedApp.icon = icon.iconPath;
-                updatedApp.iconUrl = icon.iconUrl;
-                updatedApp.iconDataUrl = imageToDataUrl(icon.iconPath);
-            } catch (err) {
-                console.error("Icon konnte beim Update nicht geladen werden:", err);
-            }
-        }
-
-        appsData.apps[index] = updatedApp;
-        saveApps(appsData);
-
-        return updatedApp;
-    });
-
-    ipcMain.handle("apps:delete", async (_event, id) => {
-        const appsData = readApps();
-        const appToDelete = appsData.apps.find((a) => a.id === id);
-
-        appsData.apps = appsData.apps.filter((a) => a.id !== id);
-        saveApps(appsData);
-
-        if (appToDelete?.icon && fs.existsSync(appToDelete.icon)) {
-            try {
-                fs.unlinkSync(appToDelete.icon);
-            } catch (err) {
-                console.error("Icon konnte nicht gelöscht werden:", err);
-            }
-        }
-
-        return true;
-    });
-
-    ipcMain.handle("profiles:get", () => {
-        return readJson("profiles.json").profiles;
-    });
-
-    ipcMain.handle("profiles:add", (_event, name) => {
-        const profilesData = readJson("profiles.json");
-
-        const id = name
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, "") || crypto.randomUUID();
-
-        if (profilesData.profiles.some((p) => p.id === id)) {
-            throw new Error("Profil existiert bereits");
-        }
-
-        const profile = {
-            id,
-            name,
-        };
-
-        profilesData.profiles.push(profile);
-        saveJson("profiles.json", profilesData);
-
-        return profile;
-    });
-
-    ipcMain.handle("profiles:get-current", () => {
-        return getCurrentProfileId();
-    });
-
-    ipcMain.handle("profiles:set-current", (_event, id) => {
-        const profiles = readJson("profiles.json").profiles;
-
-        if (!profiles.some((p) => p.id === id)) {
-            throw new Error("Profil nicht gefunden");
-        }
-
-        closeWebApp();
-        return setCurrentProfileId(id);
-    });
-
-    ipcMain.handle("nav:open", (_event, url) => {
-        openWebApp(url);
-    });
-
-    ipcMain.handle("nav:home", () => {
-        closeWebApp();
-    });
-
-    ipcMain.handle("nav:back", () => {
-        if (webView && webView.webContents.canGoBack()) {
-            webView.webContents.goBack();
-        }
-    });
-
-    ipcMain.handle("nav:forward", () => {
-        if (webView && webView.webContents.canGoForward()) {
-            webView.webContents.goForward();
-        }
-    });
-
-    ipcMain.handle("window:minimize", () => {
-        mainWindow?.minimize();
-    });
-
-    ipcMain.handle("window:maximize", () => {
-        if (!mainWindow) return;
-
-        if (mainWindow.isMaximized()) {
-            mainWindow.unmaximize();
-        } else {
-            mainWindow.maximize();
-        }
-    });
-
-    ipcMain.handle("window:close", () => {
-        mainWindow?.close();
-    });
-
-    ipcMain.handle("profiles:update", (_event, id, name) => {
-        const profilesData = readJson("profiles.json");
-        const index = profilesData.profiles.findIndex((p) => p.id === id);
-
-        if (index === -1) {
-            throw new Error("Profil nicht gefunden");
-        }
-
-        profilesData.profiles[index] = {
-            ...profilesData.profiles[index],
-            name,
-        };
-
-        saveJson("profiles.json", profilesData);
-
-        return profilesData.profiles[index];
-    });
-
-    ipcMain.handle("profiles:delete", (_event, id) => {
-        const profilesData = readJson("profiles.json");
-
-        if (profilesData.profiles.length <= 1) {
-            throw new Error("Das letzte Profil kann nicht gelöscht werden");
-        }
-
-        const profileToDelete = profilesData.profiles.find((p) => p.id === id);
-
-        if (!profileToDelete) {
-            throw new Error("Profil nicht gefunden");
-        }
-
-        profilesData.profiles = profilesData.profiles.filter((p) => p.id !== id);
-        saveJson("profiles.json", profilesData);
-
-        const settings = readJson("settings.json");
-
-        if (settings.currentProfile === id) {
-            const fallbackProfile = profilesData.profiles[0];
-            settings.currentProfile = fallbackProfile.id;
-            saveJson("settings.json", settings);
-            closeWebApp();
-        }
-
-        return true;
-    });
-
-    ipcMain.handle("shortcut:create", async (_event, id) => {
-        const appItem = findAppById(id);
-
-        if (!appItem) {
-            throw new Error("App nicht gefunden");
-        }
-
-        return await createDesktopShortcut(appItem);
-    });
-
-    ipcMain.handle("update:check", async () => {
-        if (!app.isPackaged) {
-            return {
-                status: "dev",
-                message: "Auto-Updater funktioniert nur in der gebauten App."
-            };
-        }
-
-        autoUpdater.checkForUpdates();
-        return {
-            status: "checking",
-            message: "Suche nach Updates..."
-        };
-    });
-
-    ipcMain.handle("update:download", async () => {
-        autoUpdater.downloadUpdate();
-    });
-
-    ipcMain.handle("update:install", async () => {
-        autoUpdater.quitAndInstall();
-    });
-
-    createWindow();
-
-    setupAutoUpdater();
-});
