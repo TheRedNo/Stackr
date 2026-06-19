@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { pathToFileURL } = require("url");
-const { autoUpdater } = require('electron-updater');
+const { autoUpdater } = require("electron-updater");
 
 
 const pngToIcoModule = require("png-to-ico");
@@ -181,6 +181,54 @@ function closeWebApp() {
     webView = null;
 }
 
+function setupAutoUpdater() {
+    autoUpdater.autoDownload = false;
+
+    autoUpdater.on("checking-for-update", () => {
+        mainWindow?.webContents.send("update:status", {
+            status: "checking",
+            message: "Suche nach Updates..."
+        });
+    });
+
+    autoUpdater.on("update-available", (info) => {
+        mainWindow?.webContents.send("update:status", {
+            status: "available",
+            message: "Update verfügbar",
+            version: info.version
+        });
+    });
+
+    autoUpdater.on("update-not-available", () => {
+        mainWindow?.webContents.send("update:status", {
+            status: "not-available",
+            message: "Keine Updates verfügbar"
+        });
+    });
+
+    autoUpdater.on("download-progress", (progress) => {
+        mainWindow?.webContents.send("update:status", {
+            status: "downloading",
+            message: "Update wird heruntergeladen...",
+            percent: Math.round(progress.percent)
+        });
+    });
+
+    autoUpdater.on("update-downloaded", () => {
+        mainWindow?.webContents.send("update:status", {
+            status: "downloaded",
+            message: "Update bereit zur Installation"
+        });
+    });
+
+    autoUpdater.on("error", (error) => {
+        mainWindow?.webContents.send("update:status", {
+            status: "error",
+            message: error.message
+        });
+    });
+}
+
 const isDev = !app.isPackaged;
 
 function createWindow() {
@@ -206,10 +254,6 @@ function createWindow() {
         // Im Build laden wir die lokale index.html aus dem dist-Ordner
         // Da main.js in /electron liegt, springen wir mit '..' hoch und dann in 'dist'
         mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
-
-        app.whenReady().then(() => {
-            autoUpdater.checkForUpdatesAndNotify();
-        });
     }
 
     mainWindow.webContents.once("did-finish-load", () => {
@@ -277,11 +321,7 @@ async function ensureIcoForApp(appItem) {
 
     return icoPath;
 }
-
-autoUpdater.on('update-downloaded', () => {
-    // Startet die App neu und installiert das Update im Hintergrund
-    autoUpdater.quitAndInstall();
-});
+;
 
 app.whenReady().then(() => {
     ensureDataFiles();
@@ -512,5 +552,30 @@ app.whenReady().then(() => {
         return await createDesktopShortcut(appItem);
     });
 
+    ipcMain.handle("update:check", async () => {
+        if (!app.isPackaged) {
+            return {
+                status: "dev",
+                message: "Auto-Updater funktioniert nur in der gebauten App."
+            };
+        }
+
+        autoUpdater.checkForUpdates();
+        return {
+            status: "checking",
+            message: "Suche nach Updates..."
+        };
+    });
+
+    ipcMain.handle("update:download", async () => {
+        autoUpdater.downloadUpdate();
+    });
+
+    ipcMain.handle("update:install", async () => {
+        autoUpdater.quitAndInstall();
+    });
+
     createWindow();
+
+    setupAutoUpdater();
 });

@@ -7,6 +7,7 @@ import {
     Search,
     Square,
     X,
+    Download,
 } from "lucide-react";
 import React from "react";
 
@@ -48,6 +49,14 @@ function Index() {
     const [editName, setEditName] = useState("");
     const [editUrl, setEditUrl] = useState("");
     const [editDescription, setEditDescription] = useState("");
+
+    const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+
+    useEffect(() => {
+        window.stackr.onUpdateStatus((data) => {
+            setUpdateStatus(data);
+        });
+    }, []);
 
     useEffect(() => {
         window.stackr.getApps().then(setApps);
@@ -285,6 +294,14 @@ function Index() {
                 </div>
 
                 <div className="flex items-center no-drag">
+                    <button
+                        onClick={() => window.stackr.checkForUpdates()}
+                        className="grid h-14 w-12 place-items-center hover:bg-accent"
+                        title="Nach Updates suchen"
+                    >
+                        <Download size={16} />
+                    </button>
+
                     <button
                         onClick={() => window.stackr.minimize()}
                         className="grid h-14 w-12 place-items-center hover:bg-accent"
@@ -617,6 +634,62 @@ function Index() {
                                 Save
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {updateStatus && (
+                <div className="fixed bottom-5 right-5 z-50 w-80 rounded-2xl border bg-card p-4 shadow-glow no-drag">
+                    <div className="text-sm font-semibold">
+                        Update
+                    </div>
+
+                    <div className="mt-1 text-xs text-muted-foreground">
+                        {updateStatus.message}
+                    </div>
+
+                    {updateStatus.version && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                            Version: {updateStatus.version}
+                        </div>
+                    )}
+
+                    {updateStatus.status === "downloading" && (
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                            <div
+                                className="h-full bg-primary"
+                                style={{
+                                    width: `${updateStatus.percent || 0}%`
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    <div className="mt-4 flex justify-end gap-2">
+                        {updateStatus.status === "available" && (
+                            <button
+                                onClick={() => window.stackr.downloadUpdate()}
+                                className="rounded-xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                            >
+                                Herunterladen
+                            </button>
+                        )}
+
+                        {updateStatus.status === "downloaded" && (
+                            <button
+                                onClick={() => window.stackr.installUpdate()}
+                                className="rounded-xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                            >
+                                Installieren
+                            </button>
+                        )}
+
+                        <button
+                            onClick={() => setUpdateStatus(null)}
+                            className="rounded-xl border px-3 py-2 text-xs hover:bg-accent"
+                        >
+                            Schließen
+                        </button>
                     </div>
                 </div>
             )}

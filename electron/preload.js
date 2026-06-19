@@ -23,4 +23,12 @@ contextBridge.exposeInMainWorld("stackr", {
     close: () => ipcRenderer.invoke("window:close"),
 
     createDesktopShortcut: (id) => ipcRenderer.invoke("shortcut:create", id),
+
+    checkForUpdates: () => ipcRenderer.invoke("update:check"),
+    downloadUpdate: () => ipcRenderer.invoke("update:download"),
+    installUpdate: () => ipcRenderer.invoke("update:install"),
+
+    onUpdateStatus: (callback) => {
+        ipcRenderer.on("update:status", (_event, data) => callback(data));
+    }
 });

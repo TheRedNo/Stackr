@@ -56,5 +56,24 @@ interface Window {
         close: () => Promise<void>;
 
         createDesktopShortcut: (id: string) => Promise<boolean>;
+
+        checkForUpdates: () => Promise<UpdateStatus>;
+        downloadUpdate: () => Promise<void>;
+        installUpdate: () => Promise<void>;
+        onUpdateStatus: (callback: (data: UpdateStatus) => void) => void;
     };
+}
+
+interface UpdateStatus {
+    status:
+        | "dev"
+        | "checking"
+        | "available"
+        | "not-available"
+        | "downloading"
+        | "downloaded"
+        | "error";
+    message: string;
+    version?: string;
+    percent?: number;
 }
