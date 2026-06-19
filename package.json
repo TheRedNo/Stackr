@@ -39,13 +39,12 @@
   "build": {
     "appId": "de.theredno.stackr",
     "productName": "Stackr",
-    "publish": [
-      {
+    "publish": {
         "provider": "github",
         "owner": "TheRedNo",
-        "repo": "Stackr"
-      }
-    ],
+        "repo": "Stackr",
+        "releaseType": "draft"
+      },
     "files": [
       "dist/**/*",
       "electron/**/*",
